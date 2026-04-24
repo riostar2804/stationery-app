@@ -1,0 +1,9 @@
+# Mengabaikan folder node_modules di manapun posisinya
+node_modules/
+
+# Mengabaikan file rahasia
+.env
+
+# Mengabaikan file hasil build
+dist/
+build/
