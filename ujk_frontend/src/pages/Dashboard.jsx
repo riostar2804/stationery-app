@@ -142,22 +142,29 @@ export default function Dashboard() {
     };
 
     // SUBMIT LOGIC 
-    const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            if (activeTab === 'inventory') {
-                if (!newName || !newClassName || newStock === '') return;
+            // LOGIC RESTOCK 
+            if (modalMode === 'restock') {
+                const finalStock = parseInt(newStock) + parseInt(addStockQuantity);
+                
+                await axios.put(`http://localhost:5000/api/stationery/${editingId}`, {
+                    name: newName, 
+                    class_name: newClassName, 
+                    stock: finalStock
+                });
+                fetchStationery(); // Update data di tabel
 
-                let finalStock = newStock;
-                if (modalMode === 'restock') {
-                    finalStock = parseInt(newStock) + parseInt(addStockQuantity);
-                }
+            // LOGIC MASTER DATA 
+            } else if (activeTab === 'inventory') {
+                if (!newName || !newClassName || newStock === '') return;
 
                 if (editingId) {
                     await axios.put(`http://localhost:5000/api/stationery/${editingId}`, {
-                        name: newName, class_name: newClassName, stock: finalStock
+                        name: newName, class_name: newClassName, stock: newStock
                     });
                 } else {
                     await axios.post('http://localhost:5000/api/stationery', {
@@ -166,6 +173,7 @@ export default function Dashboard() {
                 }
                 fetchStationery(); 
 
+            // 3. LOGIC DATA SUPPLIER
             } else if (activeTab === 'suppliers') {
                 if (!supplierName || !supplierContact || !supplierAddress) return;
 
@@ -183,6 +191,7 @@ export default function Dashboard() {
             
             handleCloseModal();
         } catch (error) {
+            console.error("Submit error:", error);
             alert("Failed to save data.");
         } finally {
             setLoading(false);
@@ -486,51 +495,48 @@ export default function Dashboard() {
                                 </button>
                             </div>
 
-                            <form onSubmit={handleSubmit} className="form-wrapper">
+                        <form onSubmit={handleSubmit} className="form-wrapper">
                                 
-                                {/* STATIONERY */}
-                                {activeTab === 'inventory' && (
+                                {/* Restock */}
+                                {modalMode === 'restock' ? (
                                     <>
-                                        {modalMode === 'restock' ? (
-                                            <>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-slate-400 mb-1">Items Name</label>
-                                                    <input type="text" value={newName} disabled className="input-disabled" />
-                                                </div>
-                                                <div className="flex gap-4">
-                                                    <div className="flex-1">
-                                                        <label className="block text-sm font-medium text-slate-400 mb-1">Current Stock</label>
-                                                        <input type="text" value={`${newStock} Pcs`} disabled className="input-disabled text-center" />
-                                                    </div>
-                                                    <div className="flex-[2]">
-                                                        <label className="block text-sm font-medium text-green-400 mb-1">Add Quantity</label>
-                                                        <input type="number" placeholder="e.g. 50" min="1" className="input-success" value={addStockQuantity} onChange={(e) => setAddStockQuantity(e.target.value)} required autoFocus />
-                                                    </div>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-slate-400 mb-1">Items Name</label>
-                                                    <input type="text" placeholder="Example: HVS Paper A4" className="input-default" value={newName} onChange={(e) => setNewName(e.target.value)} required />
-                                                </div>
-                                                <div className="flex gap-4">
-                                                    <div className="flex-[2]">
-                                                        <label className="block text-sm font-medium text-slate-400 mb-1">Category</label>
-                                                        <input type="text" placeholder="Example: Paper / Ink" className="input-default" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} required />
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <label className="block text-sm font-medium text-slate-400 mb-1">Stock</label>
-                                                        <input type="number" placeholder="0" min="0" className="input-default" value={newStock} onChange={(e) => setNewStock(e.target.value)} required />
-                                                    </div>
-                                                </div>
-                                            </>
-                                        )}
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-400 mb-1">Items Name</label>
+                                            <input type="text" value={newName} disabled className="input-disabled" />
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <div className="flex-1">
+                                                <label className="block text-sm font-medium text-slate-400 mb-1">Current Stock</label>
+                                                <input type="text" value={`${newStock} Pcs`} disabled className="input-disabled text-center" />
+                                            </div>
+                                            <div className="flex-[2]">
+                                                <label className="block text-sm font-medium text-green-400 mb-1">Add Quantity</label>
+                                                <input type="number" placeholder="e.g. 50" min="1" className="input-success" value={addStockQuantity} onChange={(e) => setAddStockQuantity(e.target.value)} required autoFocus />
+                                            </div>
+                                        </div>
                                     </>
-                                )}
 
-                                {/* SUPPLIER */}
-                                {activeTab === 'suppliers' && (
+                                // FORM UNTUK INVENTORY
+                                ) : activeTab === 'inventory' ? (
+                                    <>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-400 mb-1">Items Name</label>
+                                            <input type="text" placeholder="Example: HVS Paper A4" className="input-default" value={newName} onChange={(e) => setNewName(e.target.value)} required />
+                                        </div>
+                                        <div className="flex gap-4">
+                                            <div className="flex-[2]">
+                                                <label className="block text-sm font-medium text-slate-400 mb-1">Category</label>
+                                                <input type="text" placeholder="Example: Paper / Ink" className="input-default" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} required />
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="block text-sm font-medium text-slate-400 mb-1">Stock</label>
+                                                <input type="number" placeholder="0" min="0" className="input-default" value={newStock} onChange={(e) => setNewStock(e.target.value)} required />
+                                            </div>
+                                        </div>
+                                    </>
+
+                                // FORM UNTUK SUPPLIER (
+                                ) : activeTab === 'suppliers' ? (
                                     <>
                                         <div>
                                             <label className="block text-sm font-medium text-slate-400 mb-1">Supplier Name</label>
@@ -545,7 +551,7 @@ export default function Dashboard() {
                                             <textarea placeholder="Jalan Slamet Riyadi No. 12, Surakarta" className="input-default resize-none" rows="3" value={supplierAddress} onChange={(e) => setSupplierAddress(e.target.value)} required></textarea>
                                         </div>
                                     </>
-                                )}
+                                ) : null}
 
                                 <div className="modal-actions">
                                     <button type="button" onClick={handleCloseModal} className="btn-secondary">
