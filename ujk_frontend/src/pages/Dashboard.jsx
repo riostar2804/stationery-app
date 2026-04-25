@@ -3,25 +3,32 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
+    // DATA STATES
     const [stationery, setStationery] = useState([]);
+    const [suppliers, setSuppliers] = useState([]); // State baru untuk Supplier
     const [user, setUser] = useState(null);
     const navigate = useNavigate();
 
-    //SIDEBAR STATE
+    // SIDEBAR STATE
     const [activeTab, setActiveTab] = useState('dashboard');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-    //POPUP STATE
+    // POPUP STATE
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState('');
+    const [editingId, setEditingId] = useState(null); 
+    const [loading, setLoading] = useState(false);
 
-    //ADD ITEMS STATE
+    // FORM STATES - STATIONERY
     const [newName, setNewName] = useState('');
     const [newClassName, setNewClassName] = useState('');
     const [newStock, setNewStock] = useState(''); 
     const [addStockQuantity, setAddStockQuantity] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [editingId, setEditingId] = useState(null); 
+
+    // FORM STATES - SUPPLIER
+    const [supplierName, setSupplierName] = useState('');
+    const [supplierContact, setSupplierContact] = useState('');
+    const [supplierAddress, setSupplierAddress] = useState('');
 
     // SEARCH AND PAGINATION STATE
     const [searchTerm, setSearchTerm] = useState('');
@@ -36,8 +43,10 @@ export default function Dashboard() {
         }
         setUser(JSON.parse(loginUser));
         fetchStationery();
+        fetchSuppliers(); // Fetch data supplier saat load
     }, [navigate]);
 
+    // Reset pagination & search saat pindah tab
     useEffect(() => {
         setCurrentPage(1);
         setSearchTerm('');
@@ -47,6 +56,7 @@ export default function Dashboard() {
         setCurrentPage(1);
     }, [searchTerm]);
 
+    // FETCH DATA
     const fetchStationery = async () => {
         try {
             const response = await axios.get('http://localhost:5000/api/stationery');
@@ -56,7 +66,20 @@ export default function Dashboard() {
                 setStationery([]);
             }
         } catch (error) {
-            console.error("Failed to get data:", error);
+            console.error("Failed to get stationery data:", error);
+        }
+    };
+
+    const fetchSuppliers = async () => {
+        try {
+            const response = await axios.get('http://localhost:5000/api/suppliers');
+            if (response.data && response.data.data) {
+                setSuppliers(response.data.data);
+            } else {
+                setSuppliers([]);
+            }
+        } catch (error) {
+            console.error("Failed to get supplier data:", error);
         }
     };
 
@@ -65,13 +88,14 @@ export default function Dashboard() {
     const totalCategories = new Set(stationery.map(item => item.class_name)).size;
     const totalStock = stationery.reduce((sum, item) => sum + parseInt(item.stock || 0), 0);
     const lowStockItems = stationery.filter(item => parseInt(item.stock) <= 10);
+    const totalSuppliers = suppliers.length;
 
-    // OPEN POPUP ADD + DELETE LOGIC
+    // OPEN POPUP ADD
     const handleOpenModal = () => {
         setIsModalOpen(true);
     };
 
-    // OPEN POPUP RESTOCK
+    // OPEN POPUP RESTOCK 
     const handleOpenRestockModal = (item) => {
         setEditingId(item.id);
         setNewName(item.name);          
@@ -84,12 +108,18 @@ export default function Dashboard() {
 
     // EDIT LOGIC
     const handleEditClick = (item) => {
-        setActiveTab('inventory'); 
         setEditingId(item.id);          
-        setNewName(item.name);          
-        setNewClassName(item.class_name); 
-        setNewStock(item.stock); 
         setModalMode('');
+
+        if (activeTab === 'inventory') {
+            setNewName(item.name);          
+            setNewClassName(item.class_name); 
+            setNewStock(item.stock); 
+        } else if (activeTab === 'suppliers') {
+            setSupplierName(item.name);
+            setSupplierContact(item.contact);
+            setSupplierAddress(item.address);
+        }
         setIsModalOpen(true); 
     };
 
@@ -97,31 +127,61 @@ export default function Dashboard() {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setEditingId(null);
+        setModalMode('');       
+        
+        // Clear Stationery form
         setNewName('');
         setNewClassName('');
         setNewStock('');
         setAddStockQuantity(''); 
-        setModalMode('');       
+        
+        // Clear Supplier form
+        setSupplierName('');
+        setSupplierContact('');
+        setSupplierAddress('');
     };
 
-    // SUBMIT LOGIC
+    // SUBMIT LOGIC 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!newName || !newClassName || newStock === '') return;
-
         setLoading(true);
+
         try {
-            if (editingId) {
-                await axios.put(`http://localhost:5000/api/stationery/${editingId}`, {
-                    name: newName, class_name: newClassName, stock: newStock
-                });
-            } else {
-                await axios.post('http://localhost:5000/api/stationery', {
-                    users_id: user.user_id, name: newName, class_name: newClassName, stock: newStock
-                });
+            if (activeTab === 'inventory') {
+                if (!newName || !newClassName || newStock === '') return;
+
+                let finalStock = newStock;
+                if (modalMode === 'restock') {
+                    finalStock = parseInt(newStock) + parseInt(addStockQuantity);
+                }
+
+                if (editingId) {
+                    await axios.put(`http://localhost:5000/api/stationery/${editingId}`, {
+                        name: newName, class_name: newClassName, stock: finalStock
+                    });
+                } else {
+                    await axios.post('http://localhost:5000/api/stationery', {
+                        users_id: user.user_id, name: newName, class_name: newClassName, stock: newStock
+                    });
+                }
+                fetchStationery(); 
+
+            } else if (activeTab === 'suppliers') {
+                if (!supplierName || !supplierContact || !supplierAddress) return;
+
+                if (editingId) {
+                    await axios.put(`http://localhost:5000/api/suppliers/${editingId}`, {
+                        name: supplierName, contact: supplierContact, address: supplierAddress
+                    });
+                } else {
+                    await axios.post('http://localhost:5000/api/suppliers', {
+                        name: supplierName, contact: supplierContact, address: supplierAddress
+                    });
+                }
+                fetchSuppliers();
             }
+            
             handleCloseModal();
-            fetchStationery(); 
         } catch (error) {
             alert("Failed to save data.");
         } finally {
@@ -129,12 +189,17 @@ export default function Dashboard() {
         }
     };
 
-    // DELETE LOGIC
+    // DELETE LOGIC 
     const handleDelete = async (id, name) => {
         if (!window.confirm(`Delete "${name}"?`)) return;
         try {
-            await axios.delete(`http://localhost:5000/api/stationery/${id}`);
-            fetchStationery();
+            if (activeTab === 'inventory') {
+                await axios.delete(`http://localhost:5000/api/stationery/${id}`);
+                fetchStationery();
+            } else if (activeTab === 'suppliers') {
+                await axios.delete(`http://localhost:5000/api/suppliers/${id}`);
+                fetchSuppliers();
+            }
             if (editingId === id) handleCloseModal();
         } catch (error) {
             alert("Failed to delete data.");
@@ -147,10 +212,19 @@ export default function Dashboard() {
         navigate('/login');
     };
 
-    const filteredData = stationery.filter(item => 
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        item.class_name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // DYNAMIC FILTER & PAGINATION
+    const currentDataList = activeTab === 'inventory' ? stationery : suppliers;
+    
+    const filteredData = currentDataList.filter(item => {
+        if (activeTab === 'inventory') {
+            return item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                   item.class_name.toLowerCase().includes(searchTerm.toLowerCase());
+        } else {
+            return item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                   item.contact.toLowerCase().includes(searchTerm.toLowerCase());
+        }
+    });
+
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
@@ -174,6 +248,11 @@ export default function Dashboard() {
                     <button onClick={() => setActiveTab('inventory')} className={`sidebar-menu-btn ${activeTab === 'inventory' ? 'sidebar-menu-active' : 'sidebar-menu-inactive'}`}>
                         <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
                         <span className={`ml-3 font-medium transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 md:hidden'}`}>Master Data</span>
+                    </button>
+                    {/* MENU SUPPLIER BARU */}
+                    <button onClick={() => setActiveTab('suppliers')} className={`sidebar-menu-btn ${activeTab === 'suppliers' ? 'sidebar-menu-active' : 'sidebar-menu-inactive'}`}>
+                        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        <span className={`ml-3 font-medium transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 md:hidden'}`}>Data Supplier</span>
                     </button>
                 </nav>
 
@@ -235,19 +314,19 @@ export default function Dashboard() {
                                     </div>
                                     <div className="stat-card">
                                         <div className="icon-box-green">
-                                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
                                         </div>
                                         <div>
-                                            <p className="text-slate-400 text-sm font-medium">Total Stock</p>
-                                            <p className="text-3xl font-bold text-white">{totalStock} <span className="text-sm font-normal text-slate-500">Pcs</span></p>
+                                            <p className="text-slate-400 text-sm font-medium">Total Suppliers</p>
+                                            <p className="text-3xl font-bold text-white">{totalSuppliers}</p>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="warning-card">
+                                <div className="warning-card mt-8">
                                     <div className="warning-header">
                                         <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                                        <h2 className="text-lg font-bold text-red-400">Warning: Stock Running Low(≤ 10 Pcs)</h2>
+                                        <h2 className="text-lg font-bold text-red-400">Warning: Stock Running Low (≤ 10 Pcs)</h2>
                                     </div>
                                     
                                     {lowStockItems.length === 0 ? (
@@ -290,46 +369,55 @@ export default function Dashboard() {
                             </div>
                         )}
 
-                        {/* MASTER DATA */}
-                        {activeTab === 'inventory' && (
+                        {/* MASTER DATA (STATIONERY) & DATA SUPPLIER */}
+                        {(activeTab === 'inventory' || activeTab === 'suppliers') && (
                             <div className="animate-fade-in">
                                 <div className="mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
                                     <div>
-                                        <h1 className="text-2xl font-bold text-white">Master Data</h1>
-                                        <p className="text-slate-400 text-sm mt-1">Monitor the availability of stationery</p>
+                                        <h1 className="text-2xl font-bold text-white">
+                                            {activeTab === 'inventory' ? 'Master Data' : 'Data Supplier'}
+                                        </h1>
+                                        <p className="text-slate-400 text-sm mt-1">
+                                            {activeTab === 'inventory' ? 'Monitor the availability of stationery' : 'Manage your stationery suppliers'}
+                                        </p>
                                     </div>
                                     
                                     {/* OPEN POPUP */}
-                                    <button 
-                                        onClick={handleOpenModal}
-                                        className="btn-primary"
-                                    >
+                                    <button onClick={handleOpenModal} className="btn-primary">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-                                        Add Items
+                                        {activeTab === 'inventory' ? 'Add Items' : 'Add Supplier'}
                                     </button>
                                 </div>
 
-                                {/* TABLE */}
+                                {/* TABLE LIST */}
                                 <div className="bg-slate-800 rounded-xl border border-slate-700 shadow-lg overflow-hidden">
                                     <div className="search-container">
-                                        <h2 className="text-lg font-semibold flex items-center gap-2">Data Inventory</h2>
+                                        <h2 className="text-lg font-semibold flex items-center gap-2">
+                                            {activeTab === 'inventory' ? 'Data Inventory' : 'Supplier List'}
+                                        </h2>
                                         <div className="relative w-full sm:w-64">
-                                            <input type="text" placeholder="Search by name or category..." className="search-input" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                            <input 
+                                                type="text" 
+                                                placeholder={activeTab === 'inventory' ? "Search by name or category..." : "Search by name or contact..."}
+                                                className="search-input" 
+                                                value={searchTerm} 
+                                                onChange={(e) => setSearchTerm(e.target.value)} 
+                                            />
                                             <svg className="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                                         </div>
                                     </div>
                                     
                                     {currentItems.length === 0 ? (
-                                        <div className="p-12 text-center text-slate-400 italic">The item you're looking for wasn't found.</div>
+                                        <div className="p-12 text-center text-slate-400 italic">Data not found.</div>
                                     ) : (
                                         <div className="overflow-x-auto">
                                             <table className="table-base">
                                                 <thead className="table-head bg-slate-900">
                                                     <tr>
                                                         <th className="px-6 py-4 w-16 text-center">No</th>
-                                                        <th className="px-6 py-4">Items Name</th>
-                                                        <th className="px-6 py-4">Category</th>
-                                                        <th className="px-6 py-4 text-center">Stock</th>
+                                                        <th className="px-6 py-4">{activeTab === 'inventory' ? 'Items Name' : 'Supplier Name'}</th>
+                                                        <th className="px-6 py-4">{activeTab === 'inventory' ? 'Category' : 'Contact Number'}</th>
+                                                        <th className="px-6 py-4 text-center">{activeTab === 'inventory' ? 'Stock' : 'Address'}</th>
                                                         <th className="px-6 py-4 text-center">Action</th>
                                                     </tr>
                                                 </thead>
@@ -338,12 +426,22 @@ export default function Dashboard() {
                                                         <tr key={item.id} className="table-row">
                                                             <td className="px-6 py-4 text-center">{indexOfFirstItem + index + 1}</td>
                                                             <td className="px-6 py-4 font-bold text-white">{item.name}</td>
-                                                            <td className="px-6 py-4"><span className="badge-category">{item.class_name}</span></td>
-                                                            <td className="px-6 py-4 text-center">
-                                                                <span className={item.stock > 10 ? 'badge-success' : 'badge-danger'}>
-                                                                    {item.stock}
-                                                                </span>
-                                                            </td>
+                                                                                                                        {activeTab === 'inventory' ? (
+                                                                <>
+                                                                    <td className="px-6 py-4"><span className="badge-category">{item.class_name}</span></td>
+                                                                    <td className="px-6 py-4 text-center">
+                                                                        <span className={item.stock > 10 ? 'badge-success' : 'badge-danger'}>
+                                                                            {item.stock}
+                                                                        </span>
+                                                                    </td>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <td className="px-6 py-4 text-slate-300">{item.contact}</td>
+                                                                    <td className="px-6 py-4 text-center text-slate-400">{item.address}</td>
+                                                                </>
+                                                            )}
+
                                                             <td className="px-6 py-4 text-center">
                                                                 <div className="flex justify-center gap-2">
                                                                     <button onClick={() => handleEditClick(item)} className="btn-outline-yellow">Edit</button>
@@ -373,106 +471,88 @@ export default function Dashboard() {
                     </div>
                 </main>
 
+                {/* MODAL / POPUP */}
                 {isModalOpen && (
                     <div className="animate-fade-in modal-overlay">
                         <div className={`modal-base ${modalMode === 'restock' ? 'border-green-600/50' : (editingId ? 'border-yellow-600/50' : 'border-blue-600/50')}`}>
                             
                             <div className={`modal-header ${modalMode === 'restock' ? 'bg-green-900/20 border-green-700/30' : (editingId ? 'bg-yellow-900/20 border-yellow-700/30' : 'bg-slate-800 border-slate-700')}`}>
                                 <h2 className={`text-xl font-bold flex items-center gap-2 ${modalMode === 'restock' ? 'text-green-400' : (editingId ? 'text-yellow-400' : 'text-blue-400')}`}>
-                                    {modalMode === 'restock' ? '📦 Restock Item' : (editingId ? '✏️ Edit Items' : '➕ Add Items')}
+                                    {modalMode === 'restock' ? '📦 Restock Item' : (editingId ? '✏️ Edit Data' : '➕ Add Data')}
                                 </h2>
 
-                                <button 
-                                    onClick={handleCloseModal}
-                                    className="text-slate-400 hover:text-white transition-colors focus:outline-none"
-                                >
+                                <button onClick={handleCloseModal} className="text-slate-400 hover:text-white transition-colors focus:outline-none">
                                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                                 </button>
                             </div>
 
                             <form onSubmit={handleSubmit} className="form-wrapper">
-                                {modalMode === 'restock' ? (
+                                
+                                {/* STATIONERY */}
+                                {activeTab === 'inventory' && (
                                     <>
-                                        <div>
-                                            <label className="block text-sm font-medium text-slate-400 mb-1">Items Name</label>
-                                            <input 
-                                                type="text" 
-                                                value={newName} 
-                                                disabled 
-                                                className="input-disabled"
-                                            />
-                                        </div>
-                                        <div className="flex gap-4">
-                                            <div className="flex-1">
-                                                <label className="block text-sm font-medium text-slate-400 mb-1">Current Stock</label>
-                                                <input 
-                                                    type="text" 
-                                                    value={`${newStock} Pcs`} 
-                                                    disabled 
-                                                    className="input-disabled text-center"
-                                                />
-                                            </div>
-                                            <div className="flex-[2]">
-                                                <label className="block text-sm font-medium text-green-400 mb-1">Add Quantity</label>
-                                                <input 
-                                                    type="number" 
-                                                    placeholder="e.g. 50" 
-                                                    min="1" 
-                                                    className="input-success"
-                                                    value={addStockQuantity} 
-                                                    onChange={(e) => setAddStockQuantity(e.target.value)} 
-                                                    required 
-                                                    autoFocus
-                                                />
-                                            </div>
-                                        </div>
+                                        {modalMode === 'restock' ? (
+                                            <>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-400 mb-1">Items Name</label>
+                                                    <input type="text" value={newName} disabled className="input-disabled" />
+                                                </div>
+                                                <div className="flex gap-4">
+                                                    <div className="flex-1">
+                                                        <label className="block text-sm font-medium text-slate-400 mb-1">Current Stock</label>
+                                                        <input type="text" value={`${newStock} Pcs`} disabled className="input-disabled text-center" />
+                                                    </div>
+                                                    <div className="flex-[2]">
+                                                        <label className="block text-sm font-medium text-green-400 mb-1">Add Quantity</label>
+                                                        <input type="number" placeholder="e.g. 50" min="1" className="input-success" value={addStockQuantity} onChange={(e) => setAddStockQuantity(e.target.value)} required autoFocus />
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-slate-400 mb-1">Items Name</label>
+                                                    <input type="text" placeholder="Example: HVS Paper A4" className="input-default" value={newName} onChange={(e) => setNewName(e.target.value)} required />
+                                                </div>
+                                                <div className="flex gap-4">
+                                                    <div className="flex-[2]">
+                                                        <label className="block text-sm font-medium text-slate-400 mb-1">Category</label>
+                                                        <input type="text" placeholder="Example: Paper / Ink" className="input-default" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} required />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <label className="block text-sm font-medium text-slate-400 mb-1">Stock</label>
+                                                        <input type="number" placeholder="0" min="0" className="input-default" value={newStock} onChange={(e) => setNewStock(e.target.value)} required />
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
                                     </>
-                                ) : (
+                                )}
+
+                                {/* SUPPLIER */}
+                                {activeTab === 'suppliers' && (
                                     <>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-400 mb-1">Items Name</label>
-                                            <input 
-                                                type="text" placeholder="Example: HVS Paper A4" 
-                                                className="input-default"
-                                                value={newName} onChange={(e) => setNewName(e.target.value)} required 
-                                            />
+                                            <label className="block text-sm font-medium text-slate-400 mb-1">Supplier Name</label>
+                                            <input type="text" placeholder="PT Vania Maju Bersama" className="input-default" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} required />
                                         </div>
-                                        
-                                        <div className="flex gap-4">
-                                            <div className="flex-[2]">
-                                                <label className="block text-sm font-medium text-slate-400 mb-1">Category</label>
-                                                <input 
-                                                    type="text" placeholder="Example: Paper / Ink" 
-                                                    className="input-default"
-                                                    value={newClassName} onChange={(e) => setNewClassName(e.target.value)} required 
-                                                />
-                                            </div>
-                                            <div className="flex-1">
-                                                <label className="block text-sm font-medium text-slate-400 mb-1">Stock</label>
-                                                <input 
-                                                    type="number" placeholder="0" min="0" 
-                                                    className="input-default"
-                                                    value={newStock} onChange={(e) => setNewStock(e.target.value)} required 
-                                                />
-                                            </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-400 mb-1">Contact Number</label>
+                                            <input type="text" placeholder="081234567890" className="input-default" value={supplierContact} onChange={(e) => setSupplierContact(e.target.value)} required />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-400 mb-1">Address</label>
+                                            <textarea placeholder="Jalan Slamet Riyadi No. 12, Surakarta" className="input-default resize-none" rows="3" value={supplierAddress} onChange={(e) => setSupplierAddress(e.target.value)} required></textarea>
                                         </div>
                                     </>
                                 )}
 
                                 <div className="modal-actions">
-                                    <button 
-                                        type="button" 
-                                        onClick={handleCloseModal} 
-                                        className="btn-secondary"
-                                    >
+                                    <button type="button" onClick={handleCloseModal} className="btn-secondary">
                                         Cancel
                                     </button>
-                                    <button 
-                                        type="submit" 
-                                        disabled={loading} 
-                                        className={`btn-submit-base ${modalMode === 'restock' ? 'bg-green-600 hover:bg-green-500 hover:shadow-green-600/30' : (editingId ? 'bg-yellow-600 hover:bg-yellow-500 hover:shadow-yellow-600/30' : 'bg-blue-600 hover:bg-blue-500 hover:shadow-blue-600/30')}`}
-                                    >
-                                        {loading ? 'Saving...' : (modalMode === 'restock' ? 'Update Stock' : (editingId ? 'Update Data' : 'Store Items'))}
+                                    <button type="submit" disabled={loading} className={`btn-submit-base ${modalMode === 'restock' ? 'bg-green-600 hover:bg-green-500 hover:shadow-green-600/30' : (editingId ? 'bg-yellow-600 hover:bg-yellow-500 hover:shadow-yellow-600/30' : 'bg-blue-600 hover:bg-blue-500 hover:shadow-blue-600/30')}`}>
+                                        {loading ? 'Saving...' : (modalMode === 'restock' ? 'Update Stock' : (editingId ? 'Update Data' : 'Save Data'))}
                                     </button>
                                 </div>
                             </form>

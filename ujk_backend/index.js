@@ -155,6 +155,98 @@ app.delete('/api/stationery/:id', async (req, res) => {
     }
 });
 
+app.get('/api/suppliers', async (req, res) => {
+    try {
+        const query = 'SELECT id, name, contact, address FROM tb_supplier ORDER BY id DESC';
+        const [rows] = await pool.query(query);
+
+        res.json({
+            status: 'success',
+            message: "Data suppliers retrieved successfully",
+            data: rows
+        });
+    } catch (error) {
+        console.error('Error fetching suppliers:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Database connection failed',
+            error: error.message
+        });
+    }
+});
+
+// CREATE SUPPLIER
+app.post('/api/suppliers', async (req, res) => {
+    const { name, contact, address } = req.body;
+
+    if (!name || !contact || !address) {
+        return res.status(400).json({ status: 'error', message: 'Incomplete Data' });
+    }
+
+    try {
+        const query = 'INSERT INTO tb_supplier (name, contact, address) VALUES (?, ?, ?)';
+        const [result] = await pool.query(query, [name, contact, address]);
+
+        res.json({
+            status: 'success',
+            message: `Supplier ${name} added successfully`,
+            data: { id: result.insertId }
+        });
+    } catch (error) {
+        console.error('Error adding supplier:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to add supplier' });
+    }
+});
+
+// UPDATE SUPPLIER
+app.put('/api/suppliers/:id', async (req, res) => {
+    const supplierId = req.params.id;
+    const { name, contact, address } = req.body;
+
+    if (!name || !contact || !address) {
+        return res.status(400).json({ status: 'error', message: 'Incomplete Data' });
+    }
+
+    try {
+        const query = 'UPDATE tb_supplier SET name = ?, contact = ?, address = ? WHERE id = ?';
+        const [result] = await pool.query(query, [name, contact, address, supplierId]);
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ status: 'error', message: 'Supplier Not Found' });
+        }
+
+        res.json({
+            status: 'success',
+            message: 'Supplier updated successfully',
+        });
+    } catch (error) {
+        console.error('Error updating supplier:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to update supplier' });
+    }
+});
+
+// DELETE SUPPLIER
+app.delete('/api/suppliers/:id', async (req, res) => {
+    const supplierId = req.params.id;
+
+    try {
+        const query = 'DELETE FROM tb_supplier WHERE id = ?';
+        const [result] = await pool.query(query, [supplierId]);
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ status: 'error', message: 'Supplier Not Found' });
+        }
+
+        res.json({
+            status: 'success',
+            message: 'Supplier deleted successfully',
+        });
+    } catch (error) {
+        console.error('Error deleting supplier:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to delete supplier' });
+    }
+});
+
 //TESTING
 app.get('/', (req, res) => {
     res.send('<h1>Server Express Jupriola Siap Tempur! 🚀</h1><p>Akses data di: /api/servants</p>');
